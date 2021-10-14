@@ -17,25 +17,27 @@ from utils.general import non_max_suppression, scale_coords, xyxy2xywh
 from utils.torch_utils import select_device, load_classifier, time_sync
 from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterbox, mixup, random_perspective
 
-names =  [
-    "plate",
-    "hole",
-    "depression",
-    "face",
-    "lane marking",
-    "crocodile crack",
-    "crack",
-    "crack seal",
-    "permanent sign",
-    "raveling",
-    "area patch",
-    "manhole",
-    "drain",
-    "temporary sign",
-    "spot patch",
-    "sign back",
-    "bollard",
-]
+thresholds =  {
+    "plate": .3,
+    "hole": .3,
+    "depression": .5,
+    "face": .3,
+    "lane marking": .2,
+    "crocodile crack": .15,
+    "crack": .15,
+    "crack seal": .2,
+    "permanent sign": .4,
+    "raveling": .2,
+    "area patch": .6,
+    "manhole": .5,
+    "drain": .5,
+    "temporary sign": .3,
+    "spot patch": .2,
+    "sign back": .3,
+    "bollard": .6,
+}
+
+names = [k for k, _ in thresholds.items()]
 
 pluto_to_name = {
 0 :"plate",
@@ -52,9 +54,9 @@ pluto_to_name = {
 11:"pothole",
 12:"curb Damage",
 13:"crack seal",
-14:"sign",
+14:"permanent sign",
 15:"raveling",
-16:"permanent patch",
+16:"area patch",
 17:"manhole",
 18:"drain",
 19:"skid mark",
@@ -67,13 +69,13 @@ pluto_to_name = {
 26:"Wooden stick",
 27:"Oil spill",
 28:"Temporary sign",
-29:"Temporary Patch",
+29:"spot Patch",
 30:"Sign back",
 31:"Bollard",
 32:"Rutting",
 33:"Edge deterioration",
 }
-name_to_cls = { v: k for k, v in pluto_to_name.items() }
+name_to_cls = { v.lower(): k for k, v in pluto_to_name.items() }
 
 def get_headers(auth_token = None):
     headers = {} if auth_token is None else {
@@ -125,14 +127,17 @@ def remove_existing_annotations(command):
         conn.execute(f"""
         WITH captures AS (
             {command}
-        )
-        WITH annotations as (
+        ),
+        annotations as (
             DELETE FROM "Annotations"
             WHERE "CaptureId" IN (SELECT "CaptureId" from captures)
             RETURNING "AnnotationId"
         )
-        DELETE FROM "AnnotationHistory" where "AnnotationId" IN (annotations)
+        DELETE FROM "AnnotationHistory" where "AnnotationId" IN (SELECT * FROM annotations)
+        RETURNING *;
         """)
+        print(f"Removed {len(conn.fetch())}")
+        conn.connection.commit()
 
 
 def get_images(url, df, headers):
@@ -215,7 +220,7 @@ def create_annotations(url, headers, capture, detections, img_size=1024):
     url = url if url.endswith('batch') else os.path.join(url, 'api/v1/annotations/batch')
     annotations = [{
         "annotationId": str(uuid4()),
-        "className" : name_to_cls[name],
+        "className" : name_to_cls[name.lower()],
         "severe": False,
         "isFixed": False,
         "confidence": conf,
@@ -225,6 +230,25 @@ def create_annotations(url, headers, capture, detections, img_size=1024):
     for name, cls, x1, y1, x2, y2, conf in detections ]
 
     requests.post(url, headers=headers, json=annotations)
+
+
+def threshold_annotation(preds, device):
+    thres = torch.Tensor([v for k, v in thresholds.items()])
+    nc = preds.shape[2] - 5
+    xc = preds[..., 4] > .15 # initial candidates
+
+    for xi, x in enumerate(preds):
+        x = x[xc[xi]]
+
+        # Compute conf
+        x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+
+        x[:, 5:] > thres.to(device)
+
+        indices = torch.sum(x[:, 5:] > thres.to(device), dim=1, dtype=bool)
+
+        candidates = x[indices]
+        return candidates[None, :, :]
 
 
 
@@ -241,7 +265,6 @@ if __name__ == '__main__':
     parser.add_argument('--conf-thres', type=int, default=0.3)
     parser.add_argument('--iou-thres', type=int, default=0.2)
     parser.add_argument('--max-det', type=int, default=50)
-
     parser.add_argument('--remove-existing', action='store_true', help='If set, removes existing annotaitons for the involved captures')
 
     # Setup
@@ -249,8 +272,8 @@ if __name__ == '__main__':
     url = f"https://{args.env}.api.plutomap.com"
     user = args.user or os.environ.get('PLUSER')
     password = args.password or os.environ.get('PLPASSWORD')
+    assert user is not None and password is not None, "No Pluto credentials provided"
     token = authenticate(url, user, password)
-
 
     # Fetch images and prepare db
     command = get_command(command=args.command,
@@ -258,8 +281,9 @@ if __name__ == '__main__':
                           captureId=args.capture_id)
 
     captures_df = get_captures(command)
+    print(f"Fetched {len(captures_df)} captures")
     if args.remove_existing:
-        remove_existing_annotations(captures_df)
+        remove_existing_annotations(command)
 
 
     # Make predecitions
@@ -268,13 +292,10 @@ if __name__ == '__main__':
 
     images_gen = get_images(url, captures_df, get_headers(token))
 
-    count = 0
-
     pbar = tqdm(to_yolov5_dataloader(images_gen, stride))
 
     dt, seen = [0.0, 0.0, 0.0], 0
     for capture, p, img, img0 in pbar:
-        count += 1
         t1 = time_sync()
 
         img = prepare_img(device, img)
@@ -286,6 +307,8 @@ if __name__ == '__main__':
 
         t3 = time_sync()
         dt[1] += t3 - t2
+
+        pred = threshold_annotation(pred, device)
 
         # NMS
         pred = non_max_suppression(pred,
@@ -301,6 +324,3 @@ if __name__ == '__main__':
         if len(detections):
             pbar.set_description(s)
             create_annotations(url, get_headers(token), capture, detections)
-
-
-        if count > 200: break
