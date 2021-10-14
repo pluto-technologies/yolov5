@@ -137,7 +137,7 @@ def remove_existing_annotations(command):
         DELETE FROM "AnnotationHistory" where "AnnotationId" IN (SELECT * FROM annotations)
         RETURNING *;
         """)
-        print(f"Removed {len(conn.fetch())}")
+        print(f"Removed {len(conn.fetch())} existing annotations")
         conn.connection.commit()
 
 
@@ -345,5 +345,5 @@ if __name__ == '__main__':
     pbar.close()
     print()
 
-    print(total)
+    print(f"Made total of {total} annotations:")
     print(json.dumps(stats, sort_keys=True, indent=2))
