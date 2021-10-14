@@ -237,7 +237,7 @@ def create_annotations(url, headers, capture, detections, img_size=1024, stats={
         if name in stats:
             stats[name] += 1
         else:
-            stats[name] = 0
+            stats[name] = 1
 
     requests.post(url, headers=headers, json=annotations)
     return stats
@@ -252,11 +252,9 @@ def threshold_annotation(preds, device):
         x = x[xc[xi]]
 
         # Compute conf
-        x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+        confs = x[:, 5:] * x[:, 4:5]  # conf = obj_conf * cls_conf
 
-        x[:, 5:] > thres.to(device)
-
-        indices = torch.sum(x[:, 5:] > thres.to(device), dim=1, dtype=bool)
+        indices = torch.sum(confs > thres.to(device), dim=1, dtype=bool)
 
         candidates = x[indices]
         return candidates[None, :, :]
