@@ -1,3 +1,5 @@
+# Pluto YOLOv5
+
 <div align="center">
 <p>
    <a align="left" href="https://ultralytics.com/yolov5" target="_blank">
@@ -14,11 +16,7 @@
    <a href="https://join.slack.com/t/ultralytics/shared_invite/zt-w29ei8bp-jczz7QYUmDtgo6r6KcMIAg"><img src="https://img.shields.io/badge/Slack-Join_Forum-blue.svg?logo=slack" alt="Join Forum"></a>
 </div>
 
-<br>
-<p>
-YOLOv5 🚀 is a family of object detection architectures and models pretrained on the COCO dataset, and represents <a href="https://ultralytics.com">Ultralytics</a>
- open-source research into future vision AI methods, incorporating lessons learned and best practices evolved over thousands of hours of research and development.
-</p>
+Upstream: ultralytics/yolov5
 
 <div align="center">
    <a href="https://github.com/ultralytics">
@@ -54,8 +52,9 @@ YOLOv5 🚀 is a family of object detection architectures and models pretrained 
 <a align="center" href="https://ultralytics.com/yolov5" target="_blank">
 <img width="800" src="https://github.com/ultralytics/yolov5/releases/download/v1.0/banner-api.png"></a>
 -->
+TODO: Better description
+TODO: Experiment should also be the wandb name
 
-</div>
 
 ## <div align="center">Documentation</div>
 
@@ -299,3 +298,11 @@ professional support requests please visit [https://ultralytics.com/contact](htt
 
 [assets]: https://github.com/ultralytics/yolov5/releases
 [tta]: https://github.com/ultralytics/yolov5/issues/303
+=======
+### Run
+
+```bash
+python detect.py --imgsz 1024 --weights runs/train/exp52/weights/best-int8.tf
+lite --iou-thres 0.2 --conf-thres 0.3 --max-det 50 --save-txt --save-conf --source /home/kalk/aab_rout
+e
+```
