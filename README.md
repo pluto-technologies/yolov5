@@ -310,6 +310,4 @@ professional support requests please visit [https://ultralytics.com/contact](htt
 
 #### Pluto predictions
 
-https://user-images.githubusercontent.com/3143907/137401787-a8168275-83cf-4e0f-9150-9fac4d7ceac0.mov
-
- 
+![pluto-pred](https://user-images.githubusercontent.com/3143907/137402178-414c0ec7-32ef-4e7f-8f5d-7b1aba10580f.gif)
