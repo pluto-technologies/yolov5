@@ -309,7 +309,5 @@ professional support requests please visit [https://ultralytics.com/contact](htt
 ### Run
 
 ```bash
-python detect.py --imgsz 1024 --weights runs/train/exp52/weights/best-int8.tf
-lite --iou-thres 0.2 --conf-thres 0.3 --max-det 50 --save-txt --save-conf --source /home/kalk/aab_rout
-e
+python detect.py --imgsz 1024 --weights runs/train/exp52/weights/best-int8.tflite --iou-thres 0.2 --conf-thres 0.3 --max-det 50 --save-txt --save-conf --source /home/kalk/aab_route
 ```
