@@ -312,7 +312,7 @@ if __name__ == '__main__':
 
         # NMS
         pred = non_max_suppression(pred,
-                                   args.conf_thres,
+                                   0.001, # Thresholds have already been applied - only do NMS
                                    args.iou_thres,
                                    None,
                                    False,
