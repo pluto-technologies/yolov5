@@ -90,7 +90,58 @@ def run(
     # Load model
     device = select_device(device)
     model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half)
-    stride, names, pt = model.stride, model.names, model.pt
+    #stride, names, pt = model.stride, model.names, model.pt
+    # stride, names = 64, [f'class{i}' for i in range(1000)]  # assign defaults
+    stride = 64
+#       names =  [
+#       - A20 # plate
+#       - D40 # hole
+#       - D50 # depression
+#   #   - P10 # crosswalk
+#       - A10 # face
+#       - P20 # lane marking
+#       - D20 # crocodile crack
+#       - D10 # crack
+#   #   - D41 # pothole
+#   #   - D60 # curb damage
+#       - R30 # crack seal
+#       - S10 # permanent sign
+#       - D30 # raveling
+#       - R10 # area patch
+#       - M10 # manhole
+#       - M20 # drain
+#   #   - F10 # skid mark
+#   #   - M30 # hydrant
+#   #   - D70 # sidewalk tile crack
+#   #   - D80 # vegetation from below
+#   #   - M40 # scaffolding
+#   #   - M50 # container
+#   #   - F20 # wooden stick
+#       - S20 # temporary sign
+#       - R20 # spot patch
+#       - S30 # sign back
+#       - S40 # bollard
+#       ]
+
+    names =  [
+        "plate",
+        "hole",
+        "depression",
+        "face",
+        "lane marking",
+        "crocodile crack",
+        "crack",
+        "crack seal",
+        "permanent sign",
+        "raveling",
+        "area patch",
+        "manhole",
+        "drain",
+        "temporary sign",
+        "spot patch",
+        "sign back",
+        "bollard",
+    ]
     imgsz = check_img_size(imgsz, s=stride)  # check image size
 
     # Dataloader
