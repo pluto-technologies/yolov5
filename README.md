@@ -308,6 +308,8 @@ professional support requests please visit [https://ultralytics.com/contact](htt
 =======
 ### Run
 
-```bash
-python detect.py --imgsz 1024 --weights runs/train/exp52/weights/best-int8.tflite --iou-thres 0.2 --conf-thres 0.3 --max-det 50 --save-txt --save-conf --source /home/kalk/aab_route
-```
+#### Pluto predictions
+
+https://user-images.githubusercontent.com/3143907/137401787-a8168275-83cf-4e0f-9150-9fac4d7ceac0.mov
+
+ 
