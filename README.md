@@ -59,8 +59,7 @@ TODO: Experiment should also be the wandb name
 
 ```
 pip install -r requirements.txt
-git clone git@github.com:pluto-technologies/Pluto-Data.git pluto-data
-pip install pluto-data
+pip install git+ssh://git@github.com/pluto-technologies/Pluto-Data.git#egg=PlutoIntegration
 ```
 
 
