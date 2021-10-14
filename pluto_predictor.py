@@ -2,6 +2,7 @@
 
 import requests
 import argparse
+import json
 import os
 from detect import run as detect
 import numpy as np
@@ -147,7 +148,7 @@ def get_images(url, df, headers):
     Requires df to include a column named `CaptureId` for each image to fetch.
 
     """
-    for capture in tqdm(df.itertuples(), total=len(df)):
+    for capture in tqdm(df.itertuples(), total=len(df), unit='captures', colour='GREEN'):
         endpoint = os.path.join(url, 'api/v1/captures', capture.CaptureId)
         imgPath = requests.get(endpoint, headers=headers).json().get('imgPath')
         imageRes = requests.get(imgPath)
@@ -190,7 +191,7 @@ def prepare_img(device, img):
     return img
 
 
-def process_predictions(pred, img0):
+def process_predictions(env, capture, pred, img0):
     detections = []
     s = ''
     det = pred[0]
@@ -200,7 +201,10 @@ def process_predictions(pred, img0):
 
         gn = torch.tensor(img0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
 
-        s += '%gx%g ' % img.shape[2:]  # print string
+        #s += '%gx%g ' % img.shape[2:]  # print string
+        prefix = '' if env == "prod" else f"{env}."
+        url = f"https://{prefix}plutomap.com/map/capture/{capture.CaptureId}"
+        s += f"🔗 {url} 👉 "
 
         # Print results
         for c in det[:, -1].unique():
@@ -216,7 +220,7 @@ def process_predictions(pred, img0):
 
 
 
-def create_annotations(url, headers, capture, detections, img_size=1024):
+def create_annotations(url, headers, capture, detections, img_size=1024, stats={}):
     url = url if url.endswith('batch') else os.path.join(url, 'api/v1/annotations/batch')
     annotations = [{
         "annotationId": str(uuid4()),
@@ -229,7 +233,14 @@ def create_annotations(url, headers, capture, detections, img_size=1024):
     }
     for name, cls, x1, y1, x2, y2, conf in detections ]
 
+    for name, *_ in detections:
+        if name in stats:
+            stats[name] += 1
+        else:
+            stats[name] = 0
+
     requests.post(url, headers=headers, json=annotations)
+    return stats
 
 
 def threshold_annotation(preds, device):
@@ -295,7 +306,11 @@ if __name__ == '__main__':
     pbar = tqdm(to_yolov5_dataloader(images_gen, stride))
 
     dt, seen = [0.0, 0.0, 0.0], 0
+    stats = {}
+    total = 0
+    count = 0
     for capture, p, img, img0 in pbar:
+        count += 1
         t1 = time_sync()
 
         img = prepare_img(device, img)
@@ -320,7 +335,17 @@ if __name__ == '__main__':
         dt[2] += time_sync() - t3
 
 
-        detections, s = process_predictions(pred, img0.copy())
+        detections, s = process_predictions(args.env, capture, pred, img0.copy())
+        total += len(detections)
         if len(detections):
             pbar.set_description(s)
-            create_annotations(url, get_headers(token), capture, detections)
+            stats = create_annotations(url, get_headers(token), capture, detections, stats=stats)
+
+
+        if False and count > 200: break
+
+    pbar.close()
+    print()
+
+    print(total)
+    print(json.dumps(stats, sort_keys=True, indent=2))
