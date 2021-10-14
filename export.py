@@ -104,6 +104,15 @@ def export_torchscript(model, im, file, optimize, prefix=colorstr('TorchScript:'
 
         LOGGER.info(f'{prefix} export success, saved as {f} ({file_size(f):.1f} MB)')
         return f
+       #    print(f'\n{prefix} starting export with torch {torch.__version__}...')
+       #    f = file.with_suffix('.torchscript.pt')
+       #    fl = file.with_suffix('.torchscript.ptl')
+
+       #    ts = torch.jit.trace(model, im, strict=False)
+       #    # (optimize_for_mobile(ts) if optimize else ts).save(f)
+       #    (optimize_for_mobile(ts) if optimize else ts)._save_for_lite_interpreter(str(fl))
+
+       #    print(f'{prefix} export success, saved as {f} ({file_size(f):.1f} MB)')
     except Exception as e:
         LOGGER.info(f'{prefix} export failure: {e}')
 
