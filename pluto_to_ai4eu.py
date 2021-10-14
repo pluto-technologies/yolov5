@@ -7,10 +7,13 @@ from val import process_batch
 from utils.general import xywh2xyxy
 from utils.metrics import ap_per_class, ConfusionMatrix
 
-detections_dir = '/home/kalk/yolov5/runs/detect/exp33/labels/'
-labels_dir = '/home/kalk/ai4eu/pluto/labels'
-images_file = '/home/kalk/ai4eu/data/test.txt'
-OUTDIR = 'pluto4ai'
+# detections_dir = '/home/kalk/yolov5/runs/detect/exp53/labels/'
+detections_dir = '/home/kalk/yolov5/runs/detect/exp72/labels/'
+labels_dir = '/home/kalk/data/pluto/labels'
+#images_file = '/home/kalk/data/pluto/val.txt'
+images_file = '/home/kalk/data/pluto/val_sample.txt'
+#OUTDIR = 'pluto4ai'
+OUTDIR = 'tflite-sample'
 
 device = select_device('', batch_size=32)
 
@@ -19,7 +22,7 @@ def read_yolo_lines(fh):
     return [list(map(float, line.strip().split())) for line in fh]
 
 def get_detections(img_name):
-    detection_file = os.path.join(detections_dir, os.path.basename(img_name.replace('jpg', 'txt')))
+    detection_file = os.path.join(detections_dir, os.path.basename(img_name.replace('png', 'txt')))
     if not os.path.isfile(detection_file):
         return None
 
@@ -29,12 +32,13 @@ def get_detections(img_name):
     return translate_class_index(detections)
 
 def translate_class_index(detections):
-    pluto2ai4eu = {
-        1: 1, # D40
-        6: 5, # D10
-        11: 2, # M10
-        12: 3 # M20
-    }
+    pluto2ai4eu = { i: v for i, v in enumerate(names)}
+      ##pluto2ai4eu = {
+      ##    1: 1, # D40
+      ##    6: 5, # D10
+      ##    11: 2, # M10
+      ##    12: 3 # M20
+      ##}
     for i in range(len(detections)):
         cls = detections[i][0]
         if cls in pluto2ai4eu:
@@ -49,7 +53,7 @@ def translate_class_index(detections):
 
 def get_labels(label_img):
     bbox_labels = []
-    label_file = label_img.replace('jpg', 'txt').replace('images', 'labels')
+    label_file = label_img.replace('png', 'txt').replace('images', 'labels')
 
     with open(label_file) as f :
         bbox_labels += read_yolo_lines(f) or [[0 for _ in range(5)]]
@@ -65,7 +69,26 @@ def compare_img(img_name, iouv):
     return correct
 
 
-names = ['Rutting', 'D40', 'M10', 'M20', 'EdgeDeterioration', 'D10']
+#names = ['Rutting', 'D40', 'M10', 'M20', 'EdgeDeterioration', 'D10']
+names = [
+  "A20",
+  "D40",
+  "D50",
+  "A10",
+  "P20",
+  "D20",
+  "D10",
+  "R30",
+  "S10",
+  "D30",
+  "R10",
+  "M10",
+  "M20",
+  "S20",
+  "R20",
+  "S30",
+  "S40",
+]
 
 if __name__ == '__main__':
     if not os.path.isdir(OUTDIR):
@@ -114,4 +137,3 @@ if __name__ == '__main__':
     print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
     for i, c in enumerate(ap_class):
         print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
-
