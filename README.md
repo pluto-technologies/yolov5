@@ -5,6 +5,14 @@ Upstream: ultralytics/yolov5
 TODO: Better description
 TODO: Experiment should also be the wandb name
 
+### Setup
+
+```
+pip install -r requirements.txt
+git clone git@github.com:pluto-technologies/Pluto-Data.git pluto-data
+pip install pluto-data
+```
+
 
 ### Run
 
