@@ -71,7 +71,57 @@ def run(weights='yolov5s.pt',  # model.pt path(s)
     classify, suffix, suffixes = False, Path(w).suffix.lower(), ['.pt', '.onnx', '.tflite', '.pb', '']
     check_suffix(w, suffixes)  # check weights have acceptable suffix
     pt, onnx, tflite, pb, saved_model = (suffix == x for x in suffixes)  # backend booleans
-    stride, names = 64, [f'class{i}' for i in range(1000)]  # assign defaults
+    # stride, names = 64, [f'class{i}' for i in range(1000)]  # assign defaults
+    stride = 64
+#       names =  [
+#       - A20 # plate
+#       - D40 # hole
+#       - D50 # depression
+#   #   - P10 # crosswalk
+#       - A10 # face
+#       - P20 # lane marking
+#       - D20 # crocodile crack
+#       - D10 # crack
+#   #   - D41 # pothole
+#   #   - D60 # curb damage
+#       - R30 # crack seal
+#       - S10 # permanent sign
+#       - D30 # raveling
+#       - R10 # area patch
+#       - M10 # manhole
+#       - M20 # drain
+#   #   - F10 # skid mark
+#   #   - M30 # hydrant
+#   #   - D70 # sidewalk tile crack
+#   #   - D80 # vegetation from below
+#   #   - M40 # scaffolding
+#   #   - M50 # container
+#   #   - F20 # wooden stick
+#       - S20 # temporary sign
+#       - R20 # spot patch
+#       - S30 # sign back
+#       - S40 # bollard
+#       ]
+
+    names =  [
+        "plate",
+        "hole",
+        "depression",
+        "face",
+        "lane marking",
+        "crocodile crack",
+        "crack",
+        "crack seal",
+        "permanent sign",
+        "raveling",
+        "area patch",
+        "manhole",
+        "drain",
+        "temporary sign",
+        "spot patch",
+        "sign back",
+        "bollard",
+    ]
     if pt:
         model = attempt_load(weights, map_location=device)  # load FP32 model
         stride = int(model.stride.max())  # model stride
@@ -100,7 +150,7 @@ def run(weights='yolov5s.pt',  # model.pt path(s)
         elif saved_model:
             model = tf.keras.models.load_model(w)
         elif tflite:
-            interpreter = tf.lite.Interpreter(model_path=w)  # load TFLite model
+            interpreter = tf.lite.Interpreter(model_path=w, num_threads=4)  # load TFLite model
             interpreter.allocate_tensors()  # allocate
             input_details = interpreter.get_input_details()  # inputs
             output_details = interpreter.get_output_details()  # outputs
