@@ -40,6 +40,29 @@ thresholds =  {
     "bollard": .65,
 }
 
+# The numbers has no intrinsic meaning, but those classes with the same number will
+# be treated as mutually exclusive.
+cls_exclusvies = [
+    0, # "plate": .3,
+    1, # "hole": .3,
+    2, # "depression": .5,
+    3, #, "face": .3,
+    4, #" "lane marking": .2,
+    5, # "crocodile crack": .1,
+    5, # "crack": .15,
+    7, # "crack seal": .2,
+    8, # "permanent sign": .4,
+    9, # "raveling": .2,
+    10, #"area patch": .6,
+    11, # "manhole": .6,
+    12, # "drain": .7,
+    13, # "temporary sign": .3,
+    14, # "spot patch": .2,
+    15 #, "sign back": .3,
+    13 # "bollard": .65,
+]
+## torch.index_select(torch.Tensor([8,9,10,11]).to(x.device), 0, x[:, 5].int())
+
 names = [k for k, _ in thresholds.items()]
 
 pluto_to_name = {
