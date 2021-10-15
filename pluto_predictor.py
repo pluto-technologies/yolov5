@@ -115,6 +115,7 @@ def get_command(command=None, municipalities=None, captureId=None):
             JOIN "Municipalities" t2 on t1."MunicipalityId" = t2."Id"
             WHERE t2."Municipality" = ANY(ARRAY[{clause}])
             AND "Representing" AND NOT "Reviewed"
+            ORDER BY "CreatedAt" DESC
             """
 
         raise NotImplementedError("Option not supportted")
@@ -272,10 +273,10 @@ if __name__ == '__main__':
     parser.add_argument('--password', help="Pluto password, if set overrides PLPASSWORD")
     parser.add_argument('-c', '--command', help="SQL command to select captures based of")
     parser.add_argument('-m', '--municipalities', nargs='*', help="Only from these municipalities")
-    parser.add_argument('--capture-id', help='Only on this capture, captureid or capture link')
+    parser.add_argument('--capture', help='Only on this capture, captureid or capture link')
     parser.add_argument('--weights', default='runs/train/exp52/weights/best.pt')
     #parser.add_argument('--weights', default='runs/train/exp52/weights/best.torchscript.ptl')
-    parser.add_argument('--iou-thres', type=int, default=0.2)
+    parser.add_argument('--iou-thres', type=float, default=0.2)
     parser.add_argument('--max-det', type=int, default=50)
     parser.add_argument('--remove-existing', action='store_true', help='If set, removes existing annotaitons for the involved captures')
     parser.add_argument('--list-municipalities', action='store_true', help='List municipalities and exit, takes precedence over other options')
@@ -298,7 +299,7 @@ if __name__ == '__main__':
     # Fetch images and prepare db
     command = get_command(command=args.command,
                           municipalities=args.municipalities,
-                          captureId=args.capture_id)
+                          captureId=args.capture)
 
     captures_df = get_captures(command)
     print(f"Fetched {len(captures_df)} captures")
