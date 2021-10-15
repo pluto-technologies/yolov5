@@ -35,7 +35,7 @@ thresholds =  {
     "temporary sign": .3,
     "spot patch": .2,
     "sign back": .3,
-    "bollard": .6,
+    "bollard": .65,
 }
 
 names = [k for k, _ in thresholds.items()]
@@ -98,6 +98,7 @@ def get_command(command=None, municipalities=None, captureId=None):
         if command is not None:
             return command
         elif captureId is not None:
+            captureId = captureId.split('/')[-1]
             return f"""
             SELECT * from "Captures"
             WHERE "CaptureId" = '{captureId}'
@@ -222,18 +223,17 @@ def process_predictions(env, capture, pred, img0):
 
 def create_annotations(url, headers, capture, detections, img_size=1024, stats={}):
     url = url if url.endswith('batch') else os.path.join(url, 'api/v1/annotations/batch')
-    annotations = [{
-        "annotationId": str(uuid4()),
-        "className" : name_to_cls[name.lower()],
-        "severe": False,
-        "isFixed": False,
-        "confidence": conf,
-        "captureId": capture.CaptureId,
-        "x1": x1, "x2": x2, "y1": y1, "y2": y2
-    }
-    for name, cls, x1, y1, x2, y2, conf in detections ]
-
-    for name, *_ in detections:
+    annotations = []
+    for name, cls, x1, y1, x2, y2, conf in detections:
+        annotations.append({
+            "annotationId": str(uuid4()),
+            "className" : name_to_cls[name.lower()],
+            "severe": False,
+            "isFixed": False,
+            "confidence": conf,
+            "captureId": capture.CaptureId,
+            "x1": x1, "x2": x2, "y1": y1, "y2": y2
+        })
         if name in stats:
             stats[name] += 1
         else:
@@ -268,7 +268,7 @@ if __name__ == '__main__':
     parser.add_argument('--password', help="Pluto password, if set overrides PLPASSWORD")
     parser.add_argument('-c', '--command', help="SQL command to select captures based of")
     parser.add_argument('-m', '--municipalities', nargs='*', help="Only from these municipalities")
-    parser.add_argument('--capture-id', help='Only on this capture')
+    parser.add_argument('--capture-id', help='Only on this capture, captureid or capture link')
     parser.add_argument('--weights', default='runs/train/exp52/weights/best.pt')
     #parser.add_argument('--weights', default='runs/train/exp52/weights/best.torchscript.ptl')
     parser.add_argument('--conf-thres', type=int, default=0.3)
