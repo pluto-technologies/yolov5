@@ -24,7 +24,8 @@ thresholds =  {
     "depression": .5,
     "face": .3,
     "lane marking": .2,
-    "crocodile crack": .15,
+    #"crocodile crack": .15,
+    "crocodile crack": .1,
     "crack": .15,
     "crack seal": .2,
     "permanent sign": .4,
@@ -245,7 +246,8 @@ def create_annotations(url, headers, capture, detections, img_size=1024, stats={
 def threshold_annotation(preds, device):
     thres = torch.Tensor([v for k, v in thresholds.items()])
     nc = preds.shape[2] - 5
-    xc = preds[..., 4] > .15 # initial candidates
+    # xc = preds[..., 4] > .15 # initial candidates
+    xc = preds[..., 4] > .01 # initial candidates
 
     for xi, x in enumerate(preds):
         x = x[xc[xi]]
