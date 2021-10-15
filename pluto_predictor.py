@@ -213,7 +213,6 @@ def process_predictions(env, capture, pred, img0):
             s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
         for *xyxy, conf, cls in reversed(det):
-            ## xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
             c = int(cls)
             detections.append((names[c], *map(int, [cls, *xyxy]), float(conf))) # format
 
@@ -252,11 +251,13 @@ def threshold_annotation(preds, device):
         x = x[xc[xi]]
 
         # Compute conf
-        confs = x[:, 5:] * x[:, 4:5]  # conf = obj_conf * cls_conf
+        confs = x[:, 5:] * x[:, 4:5] > thres.to(device)  # conf = obj_conf * cls_conf
 
-        indices = torch.sum(confs > thres.to(device), dim=1, dtype=bool)
+        # Truncate all other non-satisfying thresholds:
+        x[:, 5:] *= confs
 
-        candidates = x[indices]
+        candidates = x[confs.any(1)] # These are the ones satisfying being above individual thresholds
+
         return candidates[None, :, :]
 
 
@@ -271,7 +272,6 @@ if __name__ == '__main__':
     parser.add_argument('--capture-id', help='Only on this capture, captureid or capture link')
     parser.add_argument('--weights', default='runs/train/exp52/weights/best.pt')
     #parser.add_argument('--weights', default='runs/train/exp52/weights/best.torchscript.ptl')
-    parser.add_argument('--conf-thres', type=int, default=0.3)
     parser.add_argument('--iou-thres', type=int, default=0.2)
     parser.add_argument('--max-det', type=int, default=50)
     parser.add_argument('--remove-existing', action='store_true', help='If set, removes existing annotaitons for the involved captures')
