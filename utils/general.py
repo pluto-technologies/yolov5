@@ -579,7 +579,7 @@ def clip_coords(boxes, shape):
 
 
 def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=None, agnostic=False, multi_label=False,
-                        labels=(), max_det=300):
+                        labels=(), max_det=300, cls_exclusive=None):
     """Runs Non-Maximum Suppression (NMS) on inference results
 
     Returns:
@@ -650,8 +650,14 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
         elif n > max_nms:  # excess boxes
             x = x[x[:, 4].argsort(descending=True)[:max_nms]]  # sort by confidence
 
+        breakpoint()
         # Batched NMS
-        c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
+        ## torch.index_select(torch.Tensor([8,9,10,11]).to(x.device), 0, x[:, 5].int())
+        if cls_exclusive is not None:
+            cls = torch.index_select(cls_exclusive.to(x.device), 0, x[:, 5].int())
+            c = cls * (0 if agnostic else max_wh
+        else:
+            c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
         boxes, scores = x[:, :4] + c, x[:, 4]  # boxes (offset by class), scores
         i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
         if i.shape[0] > max_det:  # limit detections
