@@ -4,6 +4,7 @@ import requests
 import argparse
 import json
 import os
+import sys
 from detect import run as detect
 import numpy as np
 from io import BytesIO
@@ -31,8 +32,8 @@ thresholds =  {
     "permanent sign": .4,
     "raveling": .2,
     "area patch": .6,
-    "manhole": .5,
-    "drain": .5,
+    "manhole": .6,
+    "drain": .7,
     "temporary sign": .3,
     "spot patch": .2,
     "sign back": .3,
@@ -113,7 +114,7 @@ def get_command(command=None, municipalities=None, captureId=None):
             SELECT t1.* FROM "Captures" t1
             JOIN "Municipalities" t2 on t1."MunicipalityId" = t2."Id"
             WHERE t2."Municipality" = ANY(ARRAY[{clause}])
-            AND "Representing"
+            AND "Representing" AND NOT "Reviewed"
             """
 
         raise NotImplementedError("Option not supportted")
@@ -277,9 +278,17 @@ if __name__ == '__main__':
     parser.add_argument('--iou-thres', type=int, default=0.2)
     parser.add_argument('--max-det', type=int, default=50)
     parser.add_argument('--remove-existing', action='store_true', help='If set, removes existing annotaitons for the involved captures')
+    parser.add_argument('--list-municipalities', action='store_true', help='List municipalities and exit, takes precedence over other options')
 
     # Setup
     args = parser.parse_args()
+
+    if args.list_municipalities:
+        with PlutoDB() as c:
+            c.execute("""SELECT "Municipality" FROM "Municipalities";""")
+            print(c.fetch())
+        sys.exit(0)
+
     url = f"https://{args.env}.api.plutomap.com"
     user = args.user or os.environ.get('PLUSER')
     password = args.password or os.environ.get('PLPASSWORD')
