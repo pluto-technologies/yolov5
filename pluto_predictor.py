@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import grequests
 import requests
 import argparse
 import json
@@ -168,19 +169,42 @@ def remove_existing_annotations(command):
         conn.connection.commit()
 
 
-def get_images(url, df, headers):
+def get_images(url, df, headers, num_reqs=20):
     """
     Yields Captures and PIL.Image objects from Pluto API
 
     Requires df to include a column named `CaptureId` for each image to fetch.
 
     """
-    for capture in tqdm(df.itertuples(), total=len(df), unit='captures', colour='GREEN'):
+    creqs = [] # Capture requests
+    captures = []
+    pbar = tqdm(df.itertuples(), total=len(df), unit='captures', colour='GREEN', leave=False)
+    for capture in pbar:
         endpoint = os.path.join(url, 'api/v1/captures', capture.CaptureId)
-        imgPath = requests.get(endpoint, headers=headers).json().get('imgPath')
-        imageRes = requests.get(imgPath)
-        image = Image.open(BytesIO(imageRes.content))
-        yield capture, image
+        creqs.append(grequests.get(endpoint, headers=headers))
+        captures.append(capture)
+        if len(creqs) > num_reqs:
+            imgreqs = [
+                grequests.get(img.json().get('imgPath'))
+                for img in grequests.map(creqs)
+            ]
+            for c, imgRes in zip(captures, grequests.map(imgreqs)):
+                image = Image.open(BytesIO(imgRes.content))
+                yield c, image
+            creqs = []
+            captures = []
+
+    imgreqs = [
+        grequests.get(img.json().get('imgPath'))
+        for img in grequests.map(creqs)
+    ]
+    # Empty any outstanding requests
+    for c, imgRes in zip(captures, grequests.map(imgreqs)):
+        image = Image.open(BytesIO(imgRes.content))
+        yield c, image
+
+    pbar.refresh()
+    pbar.close()
 
 
 def to_yolov5_dataloader(images_gen, stride, img_size=1024):
@@ -242,11 +266,11 @@ def process_predictions(env, capture, pred, img0):
             c = int(cls)
             detections.append((names[c], *map(int, [cls, *xyxy]), float(conf))) # format
 
-    return detections, s
+    return detections, s + '👈'
 
 
 
-def create_annotations(url, headers, capture, detections, img_size=1024, stats={}):
+def create_annotations(url, headers, capture, detections, stats={}):
     url = url if url.endswith('batch') else os.path.join(url, 'api/v1/annotations/batch')
     annotations = []
     for name, cls, x1, y1, x2, y2, conf in detections:
@@ -264,8 +288,8 @@ def create_annotations(url, headers, capture, detections, img_size=1024, stats={
         else:
             stats[name] = 1
 
-    requests.post(url, headers=headers, json=annotations)
-    return stats
+    # requests.post(url, headers=headers, json=annotations)
+    return grequests.post(url, headers=headers, json=annotations), stats
 
 
 def threshold_annotation(preds, device):
@@ -303,6 +327,8 @@ if __name__ == '__main__':
     parser.add_argument('--max-det', type=int, default=50)
     parser.add_argument('--remove-existing', action='store_true', help='If set, removes existing annotaitons for the involved captures')
     parser.add_argument('--list-municipalities', action='store_true', help='List municipalities and exit, takes precedence over other options')
+    parser.add_argument('--dry-run', action='store_true', help='Dry run without making changes')
+    parser.add_argument('--num-reqs', default=40, type=int, help="Number of requests to send at a time, default: 40)")
 
     # Setup
     args = parser.parse_args()
@@ -326,15 +352,14 @@ if __name__ == '__main__':
 
     captures_df = get_captures(command)
     print(f"Fetched {len(captures_df)} captures")
-    if args.remove_existing:
+    if args.remove_existing and not args.dry_run:
         remove_existing_annotations(command)
-
 
     # Make predecitions
     device = select_device('')
     model, stride = get_model(args.weights, device)
 
-    images_gen = get_images(url, captures_df, get_headers(token))
+    images_gen = get_images(url, captures_df, get_headers(token), num_reqs=args.num_reqs)
 
     pbar = tqdm(to_yolov5_dataloader(images_gen, stride))
 
@@ -342,6 +367,7 @@ if __name__ == '__main__':
     stats = {}
     total = 0
     count = 0
+    reqs = []
     for capture, p, img, img0 in pbar:
         count += 1
         t1 = time_sync()
@@ -370,13 +396,18 @@ if __name__ == '__main__':
 
         detections, s = process_predictions(args.env, capture, pred, img0.copy())
         total += len(detections)
-        if len(detections):
+        if len(detections) and not args.dry_run:
             pbar.set_description(s)
-            stats = create_annotations(url, get_headers(token), capture, detections, stats=stats)
-
+            req, stats = create_annotations(url, get_headers(token), capture, detections, stats=stats)
+            reqs.append(req)
+            if len(reqs) > args.num_reqs:
+                grequests.map(reqs)
+                reqs = []
 
         if False and count > 200: break
 
+    grequests.map(reqs)
+    pbar.refresh()
     pbar.close()
     print()
 
