@@ -17,8 +17,10 @@ from copy import deepcopy
 from pathlib import Path
 
 FILE = Path(__file__).resolve()
-ROOT = FILE.parents[1]  # yolov5/ dir
-sys.path.append(ROOT.as_posix())  # add yolov5/ to path
+ROOT = FILE.parents[1]  # YOLOv5 root directory
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))  # add ROOT to PATH
+# ROOT = ROOT.relative_to(Path.cwd())  # relative
 
 import numpy as np
 import tensorflow as tf
@@ -26,10 +28,10 @@ import torch
 import torch.nn as nn
 from tensorflow import keras
 
-from models.common import Conv, Bottleneck, SPP, DWConv, Focus, BottleneckCSP, Concat, autopad, C3
-from models.experimental import MixConv2d, CrossConv, attempt_load
+from models.common import Bottleneck, BottleneckCSP, Concat, Conv, C3, DWConv, Focus, SPP, SPPF, autopad
+from models.experimental import CrossConv, MixConv2d, attempt_load
 from models.yolo import Detect
-from utils.general import colorstr, make_divisible, set_logging
+from utils.general import make_divisible, print_args, set_logging
 from utils.activations import SiLU
 
 LOGGER = logging.getLogger(__name__)
@@ -70,8 +72,9 @@ class TFConv(keras.layers.Layer):
         # see https://stackoverflow.com/questions/52975843/comparing-conv2d-with-padding-between-tensorflow-and-pytorch
 
         conv = keras.layers.Conv2D(
-            c2, k, s, 'SAME' if s == 1 else 'VALID', use_bias=False,
-            kernel_initializer=keras.initializers.Constant(w.conv.weight.permute(2, 3, 1, 0).numpy()))
+            c2, k, s, 'SAME' if s == 1 else 'VALID', use_bias=False if hasattr(w, 'bn') else True,
+            kernel_initializer=keras.initializers.Constant(w.conv.weight.permute(2, 3, 1, 0).numpy()),
+            bias_initializer='zeros' if hasattr(w, 'bn') else keras.initializers.Constant(w.conv.bias.numpy()))
         self.conv = conv if s == 1 else keras.Sequential([TFPad(autopad(k, p)), conv])
         self.bn = TFBN(w.bn) if hasattr(w, 'bn') else tf.identity
 
@@ -180,6 +183,22 @@ class TFSPP(keras.layers.Layer):
         return self.cv2(tf.concat([x] + [m(x) for m in self.m], 3))
 
 
+class TFSPPF(keras.layers.Layer):
+    # Spatial pyramid pooling-Fast layer
+    def __init__(self, c1, c2, k=5, w=None):
+        super(TFSPPF, self).__init__()
+        c_ = c1 // 2  # hidden channels
+        self.cv1 = TFConv(c1, c_, 1, 1, w=w.cv1)
+        self.cv2 = TFConv(c_ * 4, c2, 1, 1, w=w.cv2)
+        self.m = keras.layers.MaxPool2D(pool_size=k, strides=1, padding='SAME')
+
+    def call(self, inputs):
+        x = self.cv1(inputs)
+        y1 = self.m(x)
+        y2 = self.m(y1)
+        return self.cv2(tf.concat([x, y1, y2, self.m(y2)], 3))
+
+
 class TFDetect(keras.layers.Layer):
     def __init__(self, nc=80, anchors=(), ch=(), imgsz=(640, 640), w=None):  # detection layer
         super(TFDetect, self).__init__()
@@ -190,7 +209,7 @@ class TFDetect(keras.layers.Layer):
         self.na = len(anchors[0]) // 2  # number of anchors
         self.grid = [tf.zeros(1)] * self.nl  # init grid
         self.anchors = tf.convert_to_tensor(w.anchors.numpy(), dtype=tf.float32)
-        self.anchor_grid = tf.reshape(tf.convert_to_tensor(w.anchor_grid.numpy(), dtype=tf.float32),
+        self.anchor_grid = tf.reshape(self.anchors * tf.reshape(self.stride, [self.nl, 1, 1]),
                                       [self.nl, 1, -1, 1, 2])
         self.m = [TFConv2d(x, self.no * self.na, 1, w=w.m[i]) for i, x in enumerate(ch)]
         self.training = False  # set to False after building model
@@ -265,11 +284,11 @@ def parse_model(d, ch, model, imgsz):  # model_dict, input_channels(3)
         for j, a in enumerate(args):
             try:
                 args[j] = eval(a) if isinstance(a, str) else a  # eval strings
-            except:
+            except NameError:
                 pass
 
         n = max(round(n * gd), 1) if n > 1 else n  # depth gain
-        if m in [nn.Conv2d, Conv, Bottleneck, SPP, DWConv, MixConv2d, Focus, CrossConv, BottleneckCSP, C3]:
+        if m in [nn.Conv2d, Conv, Bottleneck, SPP, SPPF, DWConv, MixConv2d, Focus, CrossConv, BottleneckCSP, C3]:
             c1, c2 = ch[f], args[0]
             c2 = make_divisible(c2 * gw, 8) if c2 != no else c2
 
@@ -365,7 +384,7 @@ class AgnosticNMS(keras.layers.Layer):
     # TF Agnostic NMS
     def call(self, input, topk_all, iou_thres, conf_thres):
         # wrap map_fn to avoid TypeSpec related error https://stackoverflow.com/a/65809989/3036450
-        return tf.map_fn(self._nms, input,
+        return tf.map_fn(lambda x: self._nms(x, topk_all, iou_thres, conf_thres), input,
                          fn_output_signature=(tf.float32, tf.float32, tf.float32, tf.int32),
                          name='agnostic_nms')
 
@@ -433,12 +452,12 @@ def parse_opt():
     parser.add_argument('--dynamic', action='store_true', help='dynamic batch size')
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
+    print_args(FILE.stem, opt)
     return opt
 
 
 def main(opt):
     set_logging()
-    print(colorstr('tf.py: ') + ', '.join(f'{k}={v}' for k, v in vars(opt).items()))
     run(**vars(opt))
 
 
