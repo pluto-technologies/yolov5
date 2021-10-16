@@ -24,9 +24,9 @@ thresholds =  {
     "hole": .3,
     "depression": .5,
     "face": .3,
-    "lane marking": .2,
+    "lane marking": .1,
     #"crocodile crack": .15,
-    "crocodile crack": .1,
+    "crocodile crack": .2,
     "crack": .15,
     "crack seal": .2,
     "permanent sign": .4,
@@ -35,7 +35,7 @@ thresholds =  {
     "manhole": .6,
     "drain": .7,
     "temporary sign": .3,
-    "spot patch": .2,
+    "spot patch": .3,
     "sign back": .3,
     "bollard": .65,
 }
@@ -58,8 +58,8 @@ cls_exclusvies = [
     12, # "drain": .7,
     13, # "temporary sign": .3,
     14, # "spot patch": .2,
-    15 #, "sign back": .3,
-    13 # "bollard": .65,
+    15, #, "sign back": .3,
+    13, # "bollard": .65,
 ]
 ## torch.index_select(torch.Tensor([8,9,10,11]).to(x.device), 0, x[:, 5].int())
 
