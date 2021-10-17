@@ -681,7 +681,7 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
         # Batched NMS
         ## torch.index_select(torch.Tensor([8,9,10,11]).to(x.device), 0, x[:, 5].int())
         if cls_exclusive is not None:
-            cls = torch.index_select(cls_exclusive.to(x.device), 0, x[:, 5].int())
+            cls = torch.index_select(cls_exclusive.to(x.device), 0, x[:, 5].int())[:, None]
             c = cls * (0 if agnostic else max_wh)
         else:
             c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
