@@ -390,7 +390,8 @@ if __name__ == '__main__':
                                    args.iou_thres,
                                    None,
                                    False,
-                                   max_det=args.max_det)
+                                   max_det=args.max_det,
+                                   cls_exclusive=torch.Tensor(cls_exclusvies))
         dt[2] += time_sync() - t3
 
 
