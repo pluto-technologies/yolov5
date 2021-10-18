@@ -22,11 +22,6 @@ from utils.general import non_max_suppression, scale_coords, xyxy2xywh
 from utils.torch_utils import select_device, load_classifier, time_sync
 from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterbox, mixup, random_perspective
 
-@dataclass
-class Point:
-    x: float
-    y: float 
-
 
 thresholds =  {
     "plate": .3,
@@ -49,6 +44,13 @@ thresholds =  {
     "sign back": .3,
     "bollard": .65,
 }
+
+
+@dataclass
+class Point:
+    x: float
+    y: float
+
 
 # The numbers has no intrinsic meaning, but those classes with the same number will
 # be treated as mutually exclusive.
