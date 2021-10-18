@@ -14,11 +14,19 @@ from tqdm import tqdm
 from PIL import Image
 from PlutoIntegration.lib.connector import PlutoDB
 from uuid import uuid4
+import math
+from dataclasses import dataclass
 
 from models.experimental import attempt_load
 from utils.general import non_max_suppression, scale_coords, xyxy2xywh
 from utils.torch_utils import select_device, load_classifier, time_sync
 from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterbox, mixup, random_perspective
+
+@dataclass
+class Point:
+    x: float
+    y: float 
+
 
 thresholds =  {
     "plate": .3,
@@ -26,9 +34,10 @@ thresholds =  {
     "depression": .5,
     "face": .3,
     "lane marking": .1,
-    #"crocodile crack": .15,
-    "crocodile crack": .2,
-    "crack": .15,
+    "crocodile crack": .1,
+    #"crocodile crack": .2,
+    # "crack": .15,
+    "crack": .2,
     "crack seal": .2,
     "permanent sign": .4,
     "raveling": .2,
@@ -126,7 +135,8 @@ def get_command(command=None, municipalities=None, captureId=None):
         elif captureId is not None:
             captureId = captureId.split('/')[-1]
             return f"""
-            SELECT * from "Captures"
+            SELECT * from "Captures" t1
+            LEFT JOIN "Calibrations" t2 ON t1."CalibrationId" = t2."CalibrationId"
             WHERE "CaptureId" = '{captureId}'
             """
         elif municipalities is not None:
@@ -137,6 +147,7 @@ def get_command(command=None, municipalities=None, captureId=None):
             return f"""
             SELECT t1.* FROM "Captures" t1
             JOIN "Municipalities" t2 on t1."MunicipalityId" = t2."Id"
+            LEFT JOIN "Calibrations" t3 on t1."CalibrationId" = t3."CalibrationId"
             WHERE t2."Municipality" = ANY(ARRAY[{clause}])
             AND "Representing" AND NOT "Reviewed"
             ORDER BY "CreatedAt" DESC
@@ -274,7 +285,7 @@ def create_annotations(url, headers, capture, detections, stats={}):
     url = url if url.endswith('batch') else os.path.join(url, 'api/v1/annotations/batch')
     annotations = []
     for name, cls, x1, y1, x2, y2, conf in detections:
-        annotations.append({
+        annotation = {
             "annotationId": str(uuid4()),
             "className" : name_to_cls[name.lower()],
             "severe": False,
@@ -282,7 +293,20 @@ def create_annotations(url, headers, capture, detections, stats={}):
             "confidence": conf,
             "captureId": capture.CaptureId,
             "x1": x1, "x2": x2, "y1": y1, "y2": y2
-        })
+        }
+
+        vanishingPoint = getVanishingPoint(capture.x1,
+                                           capture.x2,
+                                           capture.x3,
+                                           capture.x4,
+                                           capture.y1,
+                                           capture.y2,
+                                           capture.y2,
+                                           capture.y1)
+
+        getAnnotationMeasure(annotation, capture, vanishingPoint)
+
+        annotations.append(annotation)
         if name in stats:
             stats[name] += 1
         else:
@@ -290,6 +314,104 @@ def create_annotations(url, headers, capture, detections, stats={}):
 
     # requests.post(url, headers=headers, json=annotations)
     return grequests.post(url, headers=headers, json=annotations), stats
+
+
+def euclid(p1: Point, p2: Point):
+    return math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2)
+
+
+def translate(point: Point, angle: float, unit: float) -> Point:
+  x, y = point.x, point.y
+
+  x += unit*math.cos(angle)
+  y += unit*math.sin(angle)
+
+  return Point(x=x, y=y)
+
+
+def getVanishingPoint(x1, x2, x3, x4, y1, y2, y3, y4):
+    """
+    See: https://github.com/pluto-technologies/Pluto-Technology/blob/8a87003816c61c1d2516597e439bdc631d6afa6d/webapp/src/helpers/calibrationHelper.ts#L100-L139
+    """
+    # breakpoint()
+    upper_left = Point(x1, y1)
+    lower_left = Point(x2, y2)
+    lower_right = Point(x3, y3)
+    upper_right = Point(x4, y4)
+
+    a = euclid(lower_left, lower_right)
+
+    ## Triangle 1:
+    b1 = euclid(upper_left, lower_left)
+    c1 = euclid(upper_left, lower_right)
+
+    angle1 = math.acos(
+        (a**2 + b1**2 - c1**2) / (2 * a * b1)
+    )
+
+    ## Triangle 2:
+    b2 = euclid(lower_right, upper_right)
+    c2 = euclid(upper_right, lower_left)
+    ## angle2 = math.acos(b2**2 + c2**2 - a**2) / (2 * b2 * c2))
+    angle2 = math.acos(
+        (a**2 + b2**2 - c2**2) / (2 * a * b2)
+    )
+
+    ## Compute point of vanishing
+    a3 = x1 - x2
+    b3 = b1
+    c3 = y1 - y2
+    ## The angle relates to the orientation of the image, and not just the angle compared to the other sides of the mat:
+    angle = (180 * math.pi/180) - math.acos(
+        (a3**2 + b3**2 - c3**2)  / (2 * a3 * b3)
+    )
+    distance = a * (
+        math.sin(angle2) / (
+            math.sin(angle1) * math.cos(angle2) + math.sin(angle2)*math.cos(angle1)
+        )
+    )
+    return translate(lower_left, angle, -1 * distance)
+
+
+def getPointWithin(point: Point, vanishingPoint: Point) -> Point:
+    return Point(
+        x=point.x,
+        y=point.y if point.y > vanishingPoint.y else vanishingPoint.y
+    )
+
+
+def getAnnotationMeasure(annotation, calibration=None, vanishingPoint=None):
+    if calibration == None: return annotation
+    ## Transform the undistorted point by the perspective matrix.
+    tPoint = lambda p: transformPoint(p, calibration)
+
+    if (vanishingPoint != None and annotation['y1'] <= vanishingPoint.y and annotation['y2'] <= vanishingPoint.y ):
+        annotation['bottomMeasure'] = 0
+        annotation['leftMeasure'] = 0
+        return annotation
+
+
+    checkVanishing = lambda p: p if vanishingPoint == None else getPointWithin(p, vanishingPoint)
+
+    upper_left = tPoint(checkVanishing(Point(annotation['x1'], annotation['y1'])))
+    lower_left = tPoint(checkVanishing(Point(annotation['x1'], annotation['y2'])))
+    lower_right = tPoint(checkVanishing(Point(annotation['x2'], annotation['y2'])))
+
+    bottom = euclid(lower_left, lower_right)
+    left = euclid(lower_left, upper_left)
+    annotation['bottomMeasure'] = bottom
+    annotation['leftMeasure'] = left
+    return annotation
+
+
+def transformPoint(p: Point, calibration) -> Point:
+    pm = np.asarray([
+        [calibration.pm_0_0, calibration.pm_0_1, calibration.pm_0_2],
+        [calibration.pm_1_0, calibration.pm_1_1, calibration.pm_1_2],
+        [calibration.pm_2_0, calibration.pm_2_1, calibration.pm_2_2]
+    ])
+    a, b, c = np.dot(pm, np.array([p.x, p.y, 1]))
+    return Point( x = a/c, y = b/c )
 
 
 def threshold_annotation(preds, device):
