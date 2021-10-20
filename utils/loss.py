@@ -146,6 +146,14 @@ class ComputeLoss:
                 if self.nc > 1:  # cls loss (only if multiple classes)
                     t = torch.full_like(ps[:, 5:], self.cn, device=device)  # targets
                     t[range(n), tcls[i]] = self.cp
+
+                    # Where the correct is _crack_ crocodile is "tolerable"
+                    # and vice-versa
+                    crack_idx = 10
+                    crocodile_idx = 11
+                    t[tcls[i] == crack_idx, crocodile_idx] = .5
+                    t[tcls[i] == crocodile_idx, crack_idx] = .5
+
                     lcls += self.BCEcls(ps[:, 5:], t)  # BCE
 
                 # Append targets to text file
