@@ -22,6 +22,94 @@ from utils.general import non_max_suppression, scale_coords, xyxy2xywh
 from utils.torch_utils import select_device, load_classifier, time_sync
 from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterbox, mixup, random_perspective
 
+trusts = {
+  "A20":{
+    "name": "plate",
+    "threshold": 30,
+    "trusted": 30
+  },
+  "D40": {
+    "name": "hole",
+    "threshold": 40,
+    "trusted": 100
+  },
+  "D50": {
+    "name": "depression",
+    "threshold": 50,
+    "trusted": 50
+  },
+  "A10": {
+    "name": "face",
+    "threshold": 30,
+    "trusted": 30
+  },
+  "P20": {
+    "name": "lane marking",
+    "threshold": 10,
+    "trusted": 100
+  },
+  "D20": {
+    "name": "crocodile crack",
+    "threshold": 10,
+    "trusted": 100
+  },
+  "D10": {
+    "name": "crack",
+    "threshold": 20,
+    "trusted": 100
+  },
+  "R30": {
+    "name": "crack seal",
+    "threshold": 20,
+    "trusted": 70
+  },
+  "S10": {
+    "name": "permanent sign",
+    "threshold": 40,
+    "trusted": 40
+  },
+  "D30": {
+    "name": "raveling",
+    "threshold": 20,
+    "trusted": 100
+  },
+  "R10": {
+    "name": "area patch",
+    "threshold": 65,
+    "trusted": 65
+  },
+  "M10": {
+    "name": "manhole",
+    "threshold": 60,
+    "trusted": 60
+  },
+  "M20": {
+    "name": "drain",
+    "threshold": 70,
+    "trusted": 70
+  },
+  "S20": {
+    "name": "temporary sign",
+    "threshold": 30,
+    "trusted": 30
+  },
+  "R20": {
+    "name": "spot patch",
+    "trusted": 50,
+    "threshold": 50
+  },
+  "S30": {
+    "name": "sign back",
+    "threshold": 30,
+    "trusted": 30
+  },
+  "S40": {
+    "name": "bollard",
+    "threshold": 65,
+    "trusted": 65
+  }
+}
+
 
 thresholds =  {
     "plate": .3,
@@ -32,15 +120,15 @@ thresholds =  {
     "crocodile crack": .05,
     #"crocodile crack": .2,
     # "crack": .15,
-    "crack": .2,
+    "crack": .15,
     "crack seal": .2,
     "permanent sign": .4,
     "raveling": .2,
-    "area patch": .6,
+    "area patch": .65,
     "manhole": .6,
     "drain": .7,
     "temporary sign": .3,
-    "spot patch": .3,
+    "spot patch": .5,
     "sign back": .3,
     "bollard": .65,
 }
@@ -76,6 +164,8 @@ cls_exclusvies = [
 ## torch.index_select(torch.Tensor([8,9,10,11]).to(x.device), 0, x[:, 5].int())
 
 names = [k for k, _ in thresholds.items()]
+
+name_to_trust = { t['name']: t['trusted'] for t in trusts.values() }
 
 pluto_to_name = {
 0 :"plate",
@@ -131,15 +221,35 @@ def authenticate(url, user, pwd):
                          headers=get_headers()
      ).json().get('authorization', {}).get('accessToken')
 
-def get_command(command=None, municipalities=None, captureId=None):
+def get_command(command=None, municipalities=None, routeId=None, routeFromCapture=None, captureId=None):
         if command is not None:
             return command
         elif captureId is not None:
             captureId = captureId.split('/')[-1]
             return f"""
-            SELECT * from "Captures" t1
+            SELECT *, t1.xmin from "Captures" t1
             LEFT JOIN "Calibrations" t2 ON t1."CalibrationId" = t2."CalibrationId"
             WHERE "CaptureId" = '{captureId}'
+            """
+        elif routeId is not None:
+            return f"""
+            SELECT *, t1.xmin FROM "Captures" t1
+            LEFT JOIN "Calibrations" t2 ON t1."CalibrationId" = t2."CalibrationId"
+            JOIN "Positions" t3 ON t1."PositionId" = t3."PositionId"
+            WHERE t3."RouteId" = '{routeId}'
+            """
+        elif routeFromCapture is not None:
+            captureId = routeFromCapture.split('/')[-1]
+            return f"""
+            SELECT *, t1.xmin FROM "Captures" t1
+            LEFT JOIN "Calibrations" t2 ON t1."CalibrationId" = t2."CalibrationId"
+            JOIN "Positions" t3 ON t1."PositionId" = t3."PositionId"
+            WHERE t3."RouteId" IN (
+                SELECT "RouteId"
+                FROM "Positions" t1
+                JOIN "Captures" t2 on t1."PositionId" = t2."PositionId"
+                WHERE t2."CaptureId" = '{captureId}'
+            )
             """
         elif municipalities is not None:
             if type(municipalities) == str:
@@ -147,7 +257,7 @@ def get_command(command=None, municipalities=None, captureId=None):
             clause = "'" + "', '".join(municipalities) + "'"
 
             return f"""
-            SELECT t1.* FROM "Captures" t1
+            SELECT t1.*, t1.xmin, t3.* FROM "Captures" t1
             JOIN "Municipalities" t2 on t1."MunicipalityId" = t2."Id"
             LEFT JOIN "Calibrations" t3 on t1."CalibrationId" = t3."CalibrationId"
             WHERE t2."Municipality" = ANY(ARRAY[{clause}])
@@ -166,7 +276,7 @@ def get_captures(command):
 
 def remove_existing_annotations(command):
     with PlutoDB() as conn:
-        conn.execute(f"""
+        print(f"""
         WITH captures AS (
             {command}
         ),
@@ -176,9 +286,20 @@ def remove_existing_annotations(command):
             RETURNING "AnnotationId"
         )
         DELETE FROM "AnnotationHistory" where "AnnotationId" IN (SELECT * FROM annotations)
-        RETURNING *;
+        RETURNING "AnnotationId";
         """)
-        print(f"Removed {len(conn.fetch())} existing annotations")
+        # print(f"Removed {len(conn.fetch())} existing annotations")
+        print(f"""
+        with captures AS (
+            {command}
+        )
+        UPDATE "Captures"
+        set "Trusted" = False
+
+        where "CaptureId" IN (SELECT "CaptureId" FROM captures)
+        returning "CaptureId";
+        """)
+        # print(f"Reset trusts for {len(conn.fetch())} captures")
         conn.connection.commit()
 
 
@@ -254,8 +375,12 @@ def prepare_img(device, img):
         img = img[None]
     return img
 
+def get_capture_url(env, capture):
+    prefix = '' if env == "prod" else f"{env}."
+    return f"https://{prefix}plutomap.com/map/capture/{capture.CaptureId}"
 
-def process_predictions(env, capture, pred, img0):
+
+def process_predictions(env, capture, pred, img0, store_asymmetric=False):
     detections = []
     s = ''
     det = pred[0]
@@ -265,28 +390,33 @@ def process_predictions(env, capture, pred, img0):
 
         gn = torch.tensor(img0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
 
-        #s += '%gx%g ' % img.shape[2:]  # print string
-        prefix = '' if env == "prod" else f"{env}."
-        url = f"https://{prefix}plutomap.com/map/capture/{capture.CaptureId}"
+        url = get_capture_url(env, capture)
         s += f"🔗 {url} 👉 "
 
         # Print results
-        for c in det[:, -1].unique():
-            n = (det[:, -1] == c).sum()  # detections per class
+        for c in det[:, -3].unique():
+            n = (det[:, -3] == c).sum()  # detections per class
             s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
-        for *xyxy, conf, cls in reversed(det):
+        for *xyxy, conf, cls, obj_conf, cls_conf in reversed(det):
             c = int(cls)
-            detections.append((names[c], *map(int, [cls, *xyxy]), float(conf))) # format
+            detections.append((names[c], *map(int, [cls, *xyxy]), *map(float, (conf, obj_conf, cls_conf)))) # format
+
+            if store_asymmetric and obj_conf < .20 and cls_conf > .80:
+                ## Special case for hunting crocs and cracks with low obj conf and high cls conf:
+                with open('crack_croc_low_high.csv', 'a') as f:
+                    f.write(f""" "{names[c]}", "{conf}", "{obj_conf}", "{cls_conf}", "{url}" """.strip())
+                    f.write("\n")
+
+
 
     return detections, s + '👈'
-
 
 
 def create_annotations(url, headers, capture, detections, stats={}):
     url = url if url.endswith('batch') else os.path.join(url, 'api/v1/annotations/batch')
     annotations = []
-    for name, cls, x1, y1, x2, y2, conf in detections:
+    for name, cls, x1, y1, x2, y2, conf, obj_conf, cls_conf in detections:
         annotation = {
             "annotationId": str(uuid4()),
             "className" : name_to_cls[name.lower()],
@@ -294,19 +424,23 @@ def create_annotations(url, headers, capture, detections, stats={}):
             "isFixed": False,
             "confidence": conf,
             "captureId": capture.CaptureId,
-            "x1": x1, "x2": x2, "y1": y1, "y2": y2
+            "x1": x1, "x2": x2, "y1": y1, "y2": y2,
         }
 
-        vanishingPoint = getVanishingPoint(capture.x1,
-                                           capture.x2,
-                                           capture.x3,
-                                           capture.x4,
-                                           capture.y1,
-                                           capture.y2,
-                                           capture.y2,
-                                           capture.y1)
+        try:
+            vanishingPoint = getVanishingPoint(capture.x1,
+                                               capture.x2,
+                                               capture.x3,
+                                               capture.x4,
+                                               capture.y1,
+                                               capture.y2,
+                                               capture.y2,
+                                               capture.y1)
 
-        getAnnotationMeasure(annotation, capture, vanishingPoint)
+            annotation = getAnnotationMeasure(annotation, capture, vanishingPoint)
+        except AttributeError:
+            # There was no calibration
+            pass
 
         annotations.append(annotation)
         if name in stats:
@@ -335,7 +469,6 @@ def getVanishingPoint(x1, x2, x3, x4, y1, y2, y3, y4):
     """
     See: https://github.com/pluto-technologies/Pluto-Technology/blob/8a87003816c61c1d2516597e439bdc631d6afa6d/webapp/src/helpers/calibrationHelper.ts#L100-L139
     """
-    # breakpoint()
     upper_left = Point(x1, y1)
     lower_left = Point(x2, y2)
     lower_right = Point(x3, y3)
@@ -436,7 +569,28 @@ def threshold_annotation(preds, device):
         return candidates[None, :, :]
 
 
+def set_trusted(url, headers, capture, detections):
+    url = os.path.join(url, 'api/v1/captures?setsReviewed=false')
 
+    trust_all = True # Implicitly meaning that we trusts captures without detections too
+    for name, cls, x1, y1, x2, y2, conf, obj_conf, cls_conf in detections:
+        trust_all &= name_to_trust[name] < conf * 100
+
+    if trust_all:
+        with PlutoDB() as conn:
+            conn.execute(f"""
+                UPDATE "Captures"
+                set "Trusted" = {trust_all}
+                WHERE "CaptureId" = '{capture.CaptureId}'
+                RETURNING "CaptureId"
+            """)
+            # print(f"Updated {len(conn.fetch())} capture as trusted")
+            conn.connection.commit()
+
+    return trust_all
+
+
+################################################################################
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', default='dev', help="Environment of which API to use")
@@ -445,6 +599,8 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--command', help="SQL command to select captures based of")
     parser.add_argument('-m', '--municipalities', nargs='*', help="Only from these municipalities")
     parser.add_argument('--capture', help='Only on this capture, captureid or capture link')
+    parser.add_argument('--route-from-capture', help='Entire route based on provided capture id or link')
+    parser.add_argument('--route-id', help='Entire route based on provided route id')
     parser.add_argument('--weights', default='runs/train/exp52/weights/best.pt')
     #parser.add_argument('--weights', default='runs/train/exp52/weights/best.torchscript.ptl')
     parser.add_argument('--iou-thres', type=float, default=0.2)
@@ -453,6 +609,8 @@ if __name__ == '__main__':
     parser.add_argument('--list-municipalities', action='store_true', help='List municipalities and exit, takes precedence over other options')
     parser.add_argument('--dry-run', action='store_true', help='Dry run without making changes')
     parser.add_argument('--num-reqs', default=40, type=int, help="Number of requests to send at a time, default: 40)")
+    parser.add_argument('--store-asymmetric-conf', action="store_true", help="Store CSV of image URLs with very asymmetric class and object confidences")
+    parser.add_argument('--refresh', action='store_true', help="If set, will refresh materialized view if any captures were trusted")
 
     # Setup
     args = parser.parse_args()
@@ -472,6 +630,8 @@ if __name__ == '__main__':
     # Fetch images and prepare db
     command = get_command(command=args.command,
                           municipalities=args.municipalities,
+                          routeId=args.route_id,
+                          routeFromCapture=args.route_from_capture,
                           captureId=args.capture)
 
     captures_df = get_captures(command)
@@ -492,6 +652,7 @@ if __name__ == '__main__':
     total = 0
     count = 0
     reqs = []
+    trusted = 0
     for capture, p, img, img0 in pbar:
         count += 1
         t1 = time_sync()
@@ -519,15 +680,23 @@ if __name__ == '__main__':
         dt[2] += time_sync() - t3
 
 
-        detections, s = process_predictions(args.env, capture, pred, img0.copy())
+        detections, s = process_predictions(args.env, capture, pred, img0.copy(), args.store_asymmetric_conf)
         total += len(detections)
         if len(detections) and not args.dry_run:
             pbar.set_description(s)
+            pbar.refresh()
             req, stats = create_annotations(url, get_headers(token), capture, detections, stats=stats)
             reqs.append(req)
             if len(reqs) > args.num_reqs:
                 grequests.map(reqs)
                 reqs = []
+
+        trusted_capture = set_trusted(url, get_headers(token), capture, detections)
+        if trusted_capture:
+            s += ' [🔒 TRUSTED 🔒]'
+            pbar.set_description(s)
+            pbar.refresh()
+            trusted += 1
 
         if False and count > 200: break
 
@@ -538,3 +707,10 @@ if __name__ == '__main__':
 
     print(f"Made total of {total} annotations:")
     print(json.dumps(stats, sort_keys=True, indent=2))
+
+    print(f"Trusting {trusted} of {count} captures [{trusted/count * 100}%]")
+    if args.refresh and trusted > 0:
+        print(f"Refreshing materialized view since {trusted} captures were trusted")
+        with PlutoDB() as c:
+            c.execute("refresh materialized view capturelayer")
+            c.connection.commit()
