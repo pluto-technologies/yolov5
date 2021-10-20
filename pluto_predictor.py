@@ -29,7 +29,7 @@ thresholds =  {
     "depression": .5,
     "face": .3,
     "lane marking": .1,
-    "crocodile crack": .1,
+    "crocodile crack": .05,
     #"crocodile crack": .2,
     # "crack": .15,
     "crack": .2,
