@@ -256,3 +256,5 @@ crashlytics-build.properties
 fabric.properties
 Arial.ttf
 *.zip
+pluto/
+pluto400k/
