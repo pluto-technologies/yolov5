@@ -98,7 +98,7 @@ see `pluto --help` for full help documentation on how to use the CLI.
 The command will collect all resources in the output directory `-o ~/exp/data/` (this can be safely removed in its entirety when no longer needed).
 The directory will include: 
 ```
-/exp/data/
+- exp/data/
   - images.txt          A list of all image names
   - train.txt           Names of images in train split
   - val.txt             Names of images in validation split
