@@ -650,18 +650,20 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
             continue
 
         # Compute conf
-        x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+        confs = x[:, 5:] * x[:, 4:5]  # conf = obj_conf * cls_conf
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
         box = xywh2xyxy(x[:, :4])
 
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
-            i, j = (x[:, 5:] > conf_thres).nonzero(as_tuple=False).T
+            raise Exception("Whoops, someone broke this option!")
+            i, j = (confs > conf_thres).nonzero(as_tuple=False).T
             x = torch.cat((box[i], x[i, j + 5, None], j[:, None].float()), 1)
         else:  # best class only
-            conf, j = x[:, 5:].max(1, keepdim=True)
-            x = torch.cat((box, conf, j.float()), 1)[conf.view(-1) > conf_thres]
+            conf, j = confs.max(1, keepdim=True)
+            cls_conf, _ = x[:, 5:].max(1, keepdim=True)
+            x = torch.cat((box, conf, j.float(), x[:, 4:5], cls_conf), 1)[conf.view(-1) > conf_thres]
 
         # Filter by class
         if classes is not None:
