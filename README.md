@@ -55,16 +55,16 @@ Upstream: ultralytics/yolov5
 TODO: Better description
 TODO: Experiment should also be the wandb name
 
-### Setup
+## Setup
 
 ```
 pip install -r requirements.txt
 pip install git+ssh://git@github.com/pluto-technologies/Pluto-Data.git#egg=PlutoIntegration
 ```
 
-### Train
+## Train
 
-#### Download images to local
+### Download images to local
 
 In order to avoid a training bottleneck when reading images, they should be copied from the bucket to an attached SSD drive.
 The following one-liner can be used on a VM with database access to get images of all reviewed captures:
@@ -78,7 +78,7 @@ psql \
 ```
 In the above example, the images are stored locally in `/data/images/` directory.
 
-#### Create splits and convert labels
+### Create splits and convert labels
 
 Using the [Pluto SDK](https://github.com/pluto-technologies/Pluto-Data)
 
@@ -109,7 +109,7 @@ The directory will include:
 
 > **Note**: Since the split is currently attempting a _stratified_ split on number of classes, the val and test split will typically tend to be larger than the desired proportion.
 
-#### Start training
+### Start training
 
 Ensure that the configuration YAML file is pointing correctly to the `train.txt`, `val.txt` and `test.txt` files from [the previous section](#Create-splits-and-convert-labels).
 
@@ -372,9 +372,8 @@ professional support requests please visit [https://ultralytics.com/contact](htt
 
 [assets]: https://github.com/ultralytics/yolov5/releases
 [tta]: https://github.com/ultralytics/yolov5/issues/303
-=======
 ### Run
 
-#### Pluto predictions
+### Pluto predictions
 
 ![pluto-pred](https://user-images.githubusercontent.com/3143907/137402178-414c0ec7-32ef-4e7f-8f5d-7b1aba10580f.gif)
