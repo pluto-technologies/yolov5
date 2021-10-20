@@ -62,6 +62,73 @@ pip install -r requirements.txt
 pip install git+ssh://git@github.com/pluto-technologies/Pluto-Data.git#egg=PlutoIntegration
 ```
 
+### Train
+
+#### Download images to local
+
+In order to avoid a training bottleneck when reading images, they should be copied from the bucket to an attached SSD drive.
+The following one-liner can be used on a VM with database access to get images of all reviewed captures:
+```bash
+psql \
+    -c "select \"ImgName\" from \"Captures\" where \"Reviewed\"; \
+    --csv \
+| tail -n '+2' \
+| sed 's/^/gs:\/\/pluto-api-prod-fa69v7gs\//g' \
+| gsutil -m cp -I /data/images/
+```
+In the above example, the images are stored locally in `/data/images/` directory.
+
+#### Create splits and convert labels
+
+Using the [Pluto SDK](https://github.com/pluto-technologies/Pluto-Data)
+
+> **Note**: The `--image-dir` should match the output of `gsutil` in the command above.
+
+```
+pluto \
+  -o ~/exp/data/
+  --config /data/pluto.yaml
+  --train-split 0.9 --val-split 0.05 --test-split 0.05
+  --image-dir /data/images/
+```
+
+Where `pluto` is a CLI [automatically installed](#Setup) with this repo (exposed from [Pluto-Data](https://github.com/pluto-technologies/Pluto-Data)),
+see `pluto --help` for full help documentation on how to use the CLI.
+
+The command will collect all resources in the output directory `-o ~/exp/data/` (this can be safely removed in its entirety when no longer needed).
+The directory will include: 
+```
+/exp/data/
+  - images.txt          A list of all image names
+  - train.txt           Names of images in train split
+  - val.txt             Names of images in validation split
+  - test.txt            Names of images in test split
+  - images/             A directory of symblically linked images to the corresponding image files defined by `--image-dir`
+  - labels/             A directory of label files for each image in YOLO format
+```
+
+> **Note**: Since the split is currently attempting a _stratified_ split on number of classes, the val and test split will typically tend to be larger than the desired proportion.
+
+#### Start training
+
+Ensure that the configuration YAML file is pointing correctly to the `train.txt`, `val.txt` and `test.txt` files from [the previous section](#Create-splits-and-convert-labels).
+
+**Example**:
+```bash
+source venv/bin/activate
+python train.py \
+  --img 1024 \
+  --batch 24 \
+  --epochs 100 \
+  --data data/pluto.yaml \
+  --weights yolov5s.pt \
+  --patience 3 \
+  --hyp data/hyps/hyp.pluto.yaml \
+  --project pluto-experiment
+```
+
+> **Note**: It's a good idea to use version control on the data and hyp files used.
+
 
 ## <div align="center">Documentation</div>
 
