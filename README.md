@@ -70,7 +70,7 @@ In order to avoid a training bottleneck when reading images, they should be copi
 The following one-liner can be used on a VM with database access to get images of all reviewed captures:
 ```bash
 psql \
-    -c "select \"ImgName\" from \"Captures\" where \"Reviewed\"; \
+    -c "select \"ImgName\" from \"Captures\" where \"Reviewed\";" \
     --csv \
 | tail -n '+2' \
 | sed 's/^/gs:\/\/pluto-api-prod-fa69v7gs\//g' \
