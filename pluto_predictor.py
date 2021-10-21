@@ -237,6 +237,7 @@ def get_command(command=None, municipalities=None, routeId=None, routeFromCaptur
             LEFT JOIN "Calibrations" t2 ON t1."CalibrationId" = t2."CalibrationId"
             JOIN "Positions" t3 ON t1."PositionId" = t3."PositionId"
             WHERE t3."RouteId" = '{routeId}'
+            AND "Representing"
             """
         elif routeFromCapture is not None:
             captureId = routeFromCapture.split('/')[-1]
@@ -250,6 +251,7 @@ def get_command(command=None, municipalities=None, routeId=None, routeFromCaptur
                 JOIN "Captures" t2 on t1."PositionId" = t2."PositionId"
                 WHERE t2."CaptureId" = '{captureId}'
             )
+            AND "Representing"
             """
         elif municipalities is not None:
             if type(municipalities) == str:
@@ -276,7 +278,7 @@ def get_captures(command):
 
 def remove_existing_annotations(command):
     with PlutoDB() as conn:
-        print(f"""
+        conn.execute(f"""
         WITH captures AS (
             {command}
         ),
@@ -288,8 +290,8 @@ def remove_existing_annotations(command):
         DELETE FROM "AnnotationHistory" where "AnnotationId" IN (SELECT * FROM annotations)
         RETURNING "AnnotationId";
         """)
-        # print(f"Removed {len(conn.fetch())} existing annotations")
-        print(f"""
+        print(f"Removed {len(conn.fetch())} existing annotations")
+        conn.execute(f"""
         with captures AS (
             {command}
         )
@@ -299,7 +301,7 @@ def remove_existing_annotations(command):
         where "CaptureId" IN (SELECT "CaptureId" FROM captures)
         returning "CaptureId";
         """)
-        # print(f"Reset trusts for {len(conn.fetch())} captures")
+        print(f"Reset trusts for {len(conn.fetch())} captures")
         conn.connection.commit()
 
 
@@ -394,20 +396,21 @@ def process_predictions(env, capture, pred, img0, store_asymmetric=False):
         s += f"🔗 {url} 👉 "
 
         # Print results
-        for c in det[:, -3].unique():
-            n = (det[:, -3] == c).sum()  # detections per class
+        for c in det[:, -1].unique():
+            n = (det[:, -1] == c).sum()  # detections per class
             s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
-        for *xyxy, conf, cls, obj_conf, cls_conf in reversed(det):
+        for *xyxy, conf, cls in reversed(det):
             c = int(cls)
-            detections.append((names[c], *map(int, [cls, *xyxy]), *map(float, (conf, obj_conf, cls_conf)))) # format
+            detections.append((names[c], *map(int, [cls, *xyxy]), *map(float, (conf,)))) # format
 
+            """
             if store_asymmetric and obj_conf < .20 and cls_conf > .80:
                 ## Special case for hunting crocs and cracks with low obj conf and high cls conf:
                 with open('crack_croc_low_high.csv', 'a') as f:
                     f.write(f""" "{names[c]}", "{conf}", "{obj_conf}", "{cls_conf}", "{url}" """.strip())
                     f.write("\n")
-
+            """
 
 
     return detections, s + '👈'
@@ -416,7 +419,7 @@ def process_predictions(env, capture, pred, img0, store_asymmetric=False):
 def create_annotations(url, headers, capture, detections, stats={}):
     url = url if url.endswith('batch') else os.path.join(url, 'api/v1/annotations/batch')
     annotations = []
-    for name, cls, x1, y1, x2, y2, conf, obj_conf, cls_conf in detections:
+    for name, cls, x1, y1, x2, y2, conf in detections:
         annotation = {
             "annotationId": str(uuid4()),
             "className" : name_to_cls[name.lower()],
@@ -573,7 +576,7 @@ def set_trusted(url, headers, capture, detections):
     url = os.path.join(url, 'api/v1/captures?setsReviewed=false')
 
     trust_all = True # Implicitly meaning that we trusts captures without detections too
-    for name, cls, x1, y1, x2, y2, conf, obj_conf, cls_conf in detections:
+    for name, cls, x1, y1, x2, y2, conf in detections:
         trust_all &= name_to_trust[name] < conf * 100
 
     if trust_all:
