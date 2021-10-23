@@ -237,7 +237,7 @@ def get_command(command=None, municipalities=None, routeId=None, routeFromCaptur
             LEFT JOIN "Calibrations" t2 ON t1."CalibrationId" = t2."CalibrationId"
             JOIN "Positions" t3 ON t1."PositionId" = t3."PositionId"
             WHERE t3."RouteId" = '{routeId}'
-            AND "Representing"
+            AND "Representing" AND NOT "Reviewed"
             """
         elif routeFromCapture is not None:
             captureId = routeFromCapture.split('/')[-1]
@@ -251,7 +251,7 @@ def get_command(command=None, municipalities=None, routeId=None, routeFromCaptur
                 JOIN "Captures" t2 on t1."PositionId" = t2."PositionId"
                 WHERE t2."CaptureId" = '{captureId}'
             )
-            AND "Representing"
+            AND "Representing" AND NOT "Reviewed"
             """
         elif municipalities is not None:
             if type(municipalities) == str:
