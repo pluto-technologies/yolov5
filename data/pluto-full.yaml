@@ -1,12 +1,7 @@
-#train: /tmp/pluto/train.txt
-#val: /tmp/pluto/val.txt
-#test: /tmp/pluto/test.txt
-train: /home/kalk/data/pluto/train.txt
-val: /home/kalk/data/pluto/test.txt
-test: /home/kalk/data/pluto/val.txt
+train: /data/exp1/train.txt
+val: /data/exp1/val.txt
+test: /data/exp1/val.txt
 
-#nc: 22
-#nc: 26
 nc: 29
 
 # Used by YOLOv5
