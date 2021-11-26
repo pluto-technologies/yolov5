@@ -320,20 +320,39 @@ def get_images(url, df, headers, num_reqs=20):
         creqs.append(grequests.get(endpoint, headers=headers))
         captures.append(capture)
         if len(creqs) > num_reqs:
-            imgreqs = [
-                grequests.get(img.json().get('imgPath'))
-                for img in grequests.map(creqs)
-            ]
+            imgreqs = []
+            for capture, img in zip(capture, grequests.map(creqs)):
+                try:
+                    imgreqs.append(grequests.get(img.json().get('imgPath')))
+                except Exception as e:
+                    formatted = f"{capture.CaptureId}: {e}"
+                    with open('/tmp/pluto_predictor.log', 'a') as f:
+                        f.write(formatted + '\n')
+
+            #   imgreqs = [
+            #       grequests.get(img.json().get('imgPath'))
+            #       for img in grequests.map(creqs)
+            #   ]
             for c, imgRes in zip(captures, grequests.map(imgreqs)):
                 image = Image.open(BytesIO(imgRes.content))
                 yield c, image
             creqs = []
             captures = []
 
-    imgreqs = [
-        grequests.get(img.json().get('imgPath'))
-        for img in grequests.map(creqs)
-    ]
+    # Flush any remaining:
+    imgreqs = []
+    for capture, img in zip(captures, grequests.map(creqs)):
+        try:
+            imgreqs.append(grequests.get(img.json().get('imgPath')))
+        except Exception as e:
+            formatted = f"{capture.CaptureId}: {e}"
+            with open('/tmp/pluto_predictor.log', 'a') as f:
+                f.write(formatted + '\n')
+
+    #   imgreqs = [
+    #       grequests.get(img.json().get('imgPath'))
+    #       for img in grequests.map(creqs)
+    #   ]
     # Empty any outstanding requests
     for c, imgRes in zip(captures, grequests.map(imgreqs)):
         image = Image.open(BytesIO(imgRes.content))
