@@ -1,7 +1,7 @@
 # pip install -r requirements.txt
 
 # Pluto ---------------------------------------
-git+ssh://git@github.com/pluto-technologies/Pluto-Data.git#egg=PlutoIntegration
+# git+ssh://git@github.com/pluto-technologies/Pluto-Data.git#egg=PlutoIntegration
 
 
 # Base ----------------------------------------

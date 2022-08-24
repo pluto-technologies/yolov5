@@ -90,9 +90,9 @@ def run(
     # Load model
     device = select_device(device)
     model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half)
-    #stride, names, pt = model.stride, model.names, model.pt
+    stride, names, pt = model.stride, model.names, model.pt
     # stride, names = 64, [f'class{i}' for i in range(1000)]  # assign defaults
-    stride = 64
+    # stride = 64
 #       names =  [
 #       - A20 # plate
 #       - D40 # hole

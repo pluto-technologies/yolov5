@@ -744,7 +744,11 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
 
     bs = prediction.shape[0]  # batch size
     nc = prediction.shape[2] - 5  # number of classes
+    # prediction[..., 5 + 5] = 2 * prediction[..., 5 + 5]
+    # prediction[..., 5 + 5] = 1
     xc = prediction[..., 4] > conf_thres  # candidates
+    #xc = prediction[..., 4] > 0.01 # conf_thres  # candidates
+    #breakpoint()
 
     # Checks
     assert 0 <= conf_thres <= 1, f'Invalid Confidence threshold {conf_thres}, valid values are between 0.0 and 1.0'
@@ -780,7 +784,7 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
             continue
 
         # Compute conf
-        x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+        x[:, 5:] *= (x[:, 4:5] + x[:, 4:5])  # conf = obj_conf * cls_conf
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
         box = xywh2xyxy(x[:, :4])
