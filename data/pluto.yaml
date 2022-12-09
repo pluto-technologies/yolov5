@@ -1,17 +1,11 @@
-#train: /tmp/pluto/train.txt
-#val: /tmp/pluto/val.txt
-#test: /tmp/pluto/test.txt
-#train: /home/kalk/data/pluto/train.txt
-#val: /home/kalk/data/pluto/test.txt
-#test: /home/kalk/data/pluto/val.txt
-train: /Users/kalk/dev/yolov5/split-aug-2022/train.txt
-val: /Users/kalk/dev/yolov5/split-aug-2022/val.txt
-test: /Users/kalk/dev/yolov5/split-aug-2022/test.txt
+train: /Users/kalk/dev/yolov5/dev_2022/train.txt
+val: /Users/kalk/dev/yolov5/dec_2022/val.txt
+test: /Users/kalk/dev/yolov5/dec_2022/test.txt
 
 
 #nc: 22
 #nc: 26
-nc: 17
+nc: 18
 
 # Used by YOLOv5
 names: &classes
