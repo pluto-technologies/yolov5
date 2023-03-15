@@ -41,8 +41,9 @@ class Colors:
         self.n = len(self.palette)
 
     def __call__(self, i, bgr=False):
-        c = self.palette[int(i) % self.n]
-        return (c[2], c[1], c[0]) if bgr else c
+        return (255, 255, 255)
+        #   c = self.palette[int(i) % self.n]
+        #   return (c[2], c[1], c[0]) if bgr else c
 
     @staticmethod
     def hex2rgb(h):  # rgb order (PIL)
@@ -67,6 +68,44 @@ def check_pil_font(font=FONT, size=10):
         except URLError:  # not online
             return ImageFont.load_default()
 
+classes = {
+   "A20": "plate",                  #   0     "plate",
+   "D40": "hole",                   #   1     "hole",
+   "D01": "crack",                  #   2     "crack",
+   "D50": "depression",             #   3     "depression",
+   "P10": "crosswalk",              #   4     "crosswalk",
+   "D11": "crack",                  #   5     "crack",
+   "A10": "face ",                  #   6     "face ",
+   "LEGACY_D10": "crack",           #   7     "crack",
+   "P20": "lane marking",           #   8     "lane marking",
+   "D20": "crocodile crack",        #   9     "crocodile crack",
+   "D10": "crack",                  #  10     "crack",
+   "D41": "pothole ",               #  11     "pothole ",
+   "D60": "curb damage",            #  12     "curb damage",
+   "R30": "crack seal ",            #  13     "crack seal ",
+   "S10": "permanent sign",         #  14     "permanent sign",
+   "D30": "raveling",               #  15     "raveling",
+   "R10": "area patch",             #  16     "area patch",
+   "M10": "manhole ",               #  17     "manhole ",
+   "M20": "drain",                  #  18     "drain",
+   "F10": "skid mark",              #  19     "skid mark",
+   "M30": "hydrant",                #  20     "hydrant",
+   "D70": "sidewalk tile crack",    #  21     "sidewalk tile crack",
+   "D80": "vegetation from below",  #  22     "vegetation from below",
+   "D90": "bleeding",               #  23     "bleeding",
+   "M40": "scaffolding",            #  24     "scaffolding",
+   "M50": "container",              #  25     "container",
+   "F20": "wooden stick",           #  26     "wooden stick",
+   "F30": "oil spill",              #  27     "oil spill",
+   "S20": "temporary sign",         #  28     "temporary sign",
+   "R20": "spot patch",             #  29     "spot patch",
+   "S30": "sign back",              #  30     "sign back",
+   "S40": "bollard",                #  31     "bollard"
+   "D51": "Rutting",                #  32     "Rutting"
+   "D81": "Edge deterioration",     #  33     "Edge deterioration"
+   "R40": "Sealcoating",            #  34     "Sealcoating"
+}
+
 
 class Annotator:
     # YOLOv5 Annotator for train/val mosaics and jpgs and detect/hub inference annotations
@@ -83,8 +122,9 @@ class Annotator:
             self.im = im
         self.lw = line_width or max(round(sum(im.shape) / 2 * 0.003), 2)  # line width
 
-    def box_label(self, box, label='', color=(128, 128, 128), txt_color=(255, 255, 255)):
+    def box_label(self, box, label='', color=(128, 128, 128), txt_color=(0, 0, 0)):
         # Add one xyxy box to image with label
+        label = classes.get(label, label)
         if self.pil or not is_ascii(label):
             self.draw.rectangle(box, width=self.lw, outline=color)  # box
             if label:
