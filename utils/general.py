@@ -881,6 +881,34 @@ def clip_segments(segments, shape):
         segments[:, 1] = segments[:, 1].clip(0, shape[0])  # y
 
 
+thresholds = torch.tensor([
+    # thresholds for each class, their index indicates class, the value indicates the threshold to apply
+    0.4,    #A20
+    0.2,    #D40
+    0.5,    #D50
+    0.2,    #P10
+    0.2,    #A10
+    0.25,   #P20
+    0.1,    #D20
+    0.2,    #D10
+    0.5,    #R30
+    0.6,    #S10
+    0.15,   #D30
+    0.6,    #R10
+    0.75,   #M10
+    0.5,    #M20
+    0.3,    #F10
+    0.6,    #M30
+    0.3,    #F20
+    0.5,    #S20
+    0.5,    #R20
+    0.5,    #S30
+    0.6,    #S40
+    0.1,    #D81
+    0.2,    #D90
+])
+
+
 def non_max_suppression(
         prediction,
         conf_thres=0.25,
@@ -910,7 +938,16 @@ def non_max_suppression(
         prediction = prediction.cpu()
     bs = prediction.shape[0]  # batch size
     nc = prediction.shape[2] - nm - 5  # number of classes
-    xc = prediction[..., 4] > conf_thres  # candidates
+    #xc = prediction[..., 4] > conf_thres  # candidates
+
+    xc = prediction[..., 4] > thresholds.min()  # All True initially
+    for i in range(len(thresholds)):
+            # Either threshold doesnt apply to the class, or its above the class threshold:
+            checked = torch.logical_or(
+                prediction[..., 5] != i,
+                prediction[..., 4] >= thresholds[i]
+            )
+            xc = torch.logical_and(xc, checked)
 
     # Settings
     # min_wh = 2  # (pixels) minimum box width and height
@@ -955,7 +992,8 @@ def non_max_suppression(
             x = torch.cat((box[i], x[i, 5 + j, None], j[:, None].float(), mask[i]), 1)
         else:  # best class only
             conf, j = x[:, 5:mi].max(1, keepdim=True)
-            x = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > conf_thres]
+            # x = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > conf_thres]
+            x = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > thresholds[j].view(-1)]
 
         # Filter by class
         if classes is not None:
